@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Înregistrare Studenți</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px;
+        }
+        .container {
+            max-width: 1200px; margin: 0 auto; background: white; border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+        }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { font-size: 2em; margin-bottom: 10px; }
+        .client-id-section { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-top: 15px; }
+        .client-id-section input { padding: 10px; border: none; border-radius: 5px; width: 250px; font-size: 14px; }
+        .menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; padding: 30px; }
+        .menu-button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 20px; border-radius: 10px; font-size: 16px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; font-weight: 600; }
+        .menu-button:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
+        .content { padding: 30px; min-height: 300px; }
+        .input-section { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; }
+        .input-group input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 5px; font-size: 14px; transition: border-color 0.3s; }
+        .input-group input:focus { outline: none; border-color: #667eea; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 5px; font-size: 16px; cursor: pointer; font-weight: 600; transition: transform 0.2s; }
+        .btn-primary:hover { transform: scale(1.05); }
+        .result-table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .result-table th { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; text-align: left; font-weight: 600; }
+        .result-table td { padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .result-table tr:hover { background: #f8f9fa; }
+        .message { padding: 15px; border-radius: 5px; margin-bottom: 20px; font-weight: 600; }
+        .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { text-align: center; padding: 40px; color: #667eea; font-size: 18px; }
+        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: 600; }
+        .status-online { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🎓 Sistem Înregistrare Studenți</h1>
+        <p>Aplicație modernă cu Spring Boot & REST API</p>
+        <div class="client-id-section">
+            <label>ID Client (pentru logging):</label>
+            <input type="text" id="clientId" value="client-001" placeholder="Introduceți ID-ul dvs.">
+            <span class="status-badge status-online">● Connected</span>
+        </div>
+    </div>
+
+    <div class="menu">
+        <button class="menu-button" onclick="showAllStudents()">👨‍🎓 Lista Studenți</button>
+        <button class="menu-button" onclick="showAllCourses()">📚 Lista Cursuri</button>
+        <button class="menu-button" onclick="showRegisteredStudentsForm()">🔍 Studenți la Curs</button>
+        <button class="menu-button" onclick="showRegisteredCoursesForm()">📋 Cursuri Student</button>
+        <button class="menu-button" onclick="showCompletedCoursesForm()">✅ Cursuri Absolvite</button>
+        <button class="menu-button" onclick="showRegistrationForm()">➕ Înregistrare Nouă</button>
+    </div>
+
+    <div class="content" id="content">
+        <h2 style="text-align: center; color: #667eea;">Selectați o opțiune din meniu</h2>
+    </div>
+</div>
+
+<script>
+    // Schimba API_URL daca rulezi pe alt host/port
+    const API_URL = 'http://localhost:8082/api';
+
+    function getClientId() {
+        return document.getElementById('clientId').value || 'anonymous';
+    }
+
+    function getHeaders() {
+        return {
+            'Content-Type': 'application/json',
+            'X-Client-ID': getClientId()
+        };
+    }
+
+    // Helper: normalizeaza raspunsul la array (fallback la cheie specifica)
+    function normalizeArray(data, key) {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (key && Array.isArray(data[key])) return data[key];
+        // Uneori API returneaza { items: [...] } sau { data: [...] }
+        if (Array.isArray(data.items)) return data.items;
+        if (Array.isArray(data.data)) return data.data;
+        return [];
+    }
+
+    async function fetchJson(url, opts = {}) {
+        const response = await fetch(url, opts);
+        // verificam statusul
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            let msg = `HTTP ${response.status}`;
+            try { const j = JSON.parse(text); if (j.message) msg += ` - ${j.message}`; else if (text) msg += ` - ${text}`; } catch(e) { if (text) msg += ` - ${text}`; }
+            throw new Error(msg);
+        }
+        // incercam parse JSON (daca e empty -> intoarcem null)
+        const txt = await response.text();
+        if (!txt) return null;
+        try { return JSON.parse(txt); } catch(e) { throw new Error('Răspuns invalid JSON'); }
+    }
+
+    async function showAllStudents() {
+        const content = document.getElementById('content');
+        content.innerHTML = '<div class="loading">Se încarcă...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/students`, { headers: getHeaders() });
+            const students = normalizeArray(data, 'students');
+
+            if (!students.length) {
+                content.innerHTML = '<div class="message">Nu există studenți.</div>';
+                return;
+            }
+
+            let html = '<h2>📋 Lista Tuturor Studenților</h2>';
+            html += '<table class="result-table"><thead><tr>';
+            html += '<th>ID Student</th><th>Nume</th><th>Specializare</th>';
+            html += '</tr></thead><tbody>';
+
+            students.forEach(s => {
+                html += `<tr><td>${s.sid ?? s.id ?? ''}</td><td>${s.name ?? ''}</td><td>${s.specialization ?? s.speciality ?? ''}</td></tr>`;
+            });
+
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        } catch (error) {
+            content.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    async function showAllCourses() {
+        const content = document.getElementById('content');
+        content.innerHTML = '<div class="loading">Se încarcă...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/courses`, { headers: getHeaders() });
+            const courses = normalizeArray(data, 'courses');
+
+            if (!courses.length) {
+                content.innerHTML = '<div class="message">Nu există cursuri.</div>';
+                return;
+            }
+
+            let html = '<h2>📚 Lista Tuturor Cursurilor</h2>';
+            html += '<table class="result-table"><thead><tr>';
+            html += '<th>ID Curs</th><th>Nume</th><th>Zi</th><th>Orar</th><th>Profesor</th>';
+            html += '</tr></thead><tbody>';
+
+            courses.forEach(c => {
+                const time = `${c.startTime ?? ''} - ${c.endTime ?? ''}`;
+                html += `<tr><td>${c.cid ?? c.id ?? ''}</td><td>${c.name ?? ''}</td><td>${c.days ?? ''}</td><td>${time}</td><td>${c.instructor ?? c.teacher ?? ''}</td></tr>`;
+            });
+
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        } catch (error) {
+            content.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    function showRegisteredStudentsForm() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <h2>🔍 Studenți Înregistrați la un Curs</h2>
+            <div class="input-section">
+                <div class="input-group">
+                    <label>ID Curs:</label>
+                    <input type="text" id="courseIdInput" placeholder="Ex: 17651">
+                </div>
+                <button class="btn-primary" onclick="getRegisteredStudents()">Caută</button>
+            </div>
+            <div id="results"></div>
+        `;
+    }
+
+    async function getRegisteredStudents() {
+        const cid = document.getElementById('courseIdInput').value;
+        const results = document.getElementById('results');
+        if (!cid) { results.innerHTML = '<div class="message error">Introduceți un ID de curs!</div>'; return; }
+        results.innerHTML = '<div class="loading">Se încarcă...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/courses/${encodeURIComponent(cid)}/registered-students`, { headers: getHeaders() });
+            const students = normalizeArray(data, 'students');
+            if (!students.length) { results.innerHTML = '<div class="message">Nu sunt studenți înregistrați.</div>'; return; }
+            let html = '<table class="result-table"><thead><tr>';
+            html += '<th>ID Student</th><th>Nume</th><th>Specializare</th>';
+            html += '</tr></thead><tbody>';
+            students.forEach(s => {
+                html += `<tr><td>${s.sid ?? s.id ?? ''}</td><td>${s.name ?? ''}</td><td>${s.specialization ?? s.speciality ?? ''}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            results.innerHTML = html;
+        } catch (error) {
+            results.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    function showRegisteredCoursesForm() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <h2>📋 Cursuri la care este Înregistrat un Student</h2>
+            <div class="input-section">
+                <div class="input-group">
+                    <label>ID Student:</label>
+                    <input type="text" id="studentIdInput" placeholder="Ex: 123456789">
+                </div>
+                <button class="btn-primary" onclick="getRegisteredCourses()">Caută</button>
+            </div>
+            <div id="results"></div>
+        `;
+    }
+
+    async function getRegisteredCourses() {
+        const sid = document.getElementById('studentIdInput').value;
+        const results = document.getElementById('results');
+        if (!sid) { results.innerHTML = '<div class="message error">Introduceți un ID de student!</div>'; return; }
+        results.innerHTML = '<div class="loading">Se încarcă...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/students/${encodeURIComponent(sid)}/registered-courses`, { headers: getHeaders() });
+            const courses = normalizeArray(data, 'courses');
+            if (!courses.length) { results.innerHTML = '<div class="message">Studentul nu este înregistrat la cursuri.</div>'; return; }
+            let html = '<table class="result-table"><thead><tr>';
+            html += '<th>ID Curs</th><th>Nume</th><th>Zi</th><th>Orar</th><th>Profesor</th>';
+            html += '</tr></thead><tbody>';
+            courses.forEach(c => {
+                html += `<tr><td>${c.cid ?? c.id ?? ''}</td><td>${c.name ?? ''}</td><td>${c.days ?? ''}</td><td>${c.startTime ?? ''} - ${c.endTime ?? ''}</td><td>${c.instructor ?? c.teacher ?? ''}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            results.innerHTML = html;
+        } catch (error) {
+            results.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    function showCompletedCoursesForm() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <h2>✅ Cursuri Absolvite de Student</h2>
+            <div class="input-section">
+                <div class="input-group">
+                    <label>ID Student:</label>
+                    <input type="text" id="studentIdComp" placeholder="Ex: 123456789">
+                </div>
+                <button class="btn-primary" onclick="getCompletedCourses()">Caută</button>
+            </div>
+            <div id="results"></div>
+        `;
+    }
+
+    async function getCompletedCourses() {
+        const sid = document.getElementById('studentIdComp').value;
+        const results = document.getElementById('results');
+        if (!sid) { results.innerHTML = '<div class="message error">Introduceți un ID de student!</div>'; return; }
+        results.innerHTML = '<div class="loading">Se încarcă...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/students/${encodeURIComponent(sid)}/completed-courses`, { headers: getHeaders() });
+            const courses = normalizeArray(data, 'courses');
+            if (!courses.length) { results.innerHTML = '<div class="message">Nu sunt cursuri absolvite.</div>'; return; }
+            let html = '<ul style="list-style: none; padding: 20px;">';
+            courses.forEach(cid => { html += `<li style="padding: 10px; background: #f8f9fa; margin: 5px 0; border-radius: 5px;">📖 ${cid}</li>`; });
+            html += '</ul>';
+            results.innerHTML = html;
+        } catch (error) {
+            results.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    function showRegistrationForm() {
+        const content = document.getElementById('content');
+        content.innerHTML = `
+            <h2>➕ Înregistrare Nouă Student la Curs</h2>
+            <div class="input-section">
+                <div class="input-group">
+                    <label>ID Student:</label>
+                    <input type="text" id="regStudentId" placeholder="Ex: 123456789">
+                </div>
+                <div class="input-group">
+                    <label>ID Curs:</label>
+                    <input type="text" id="regCourseId" placeholder="Ex: 17651">
+                </div>
+                <button class="btn-primary" onclick="registerStudent()">Înregistrează</button>
+            </div>
+            <div id="results"></div>
+        `;
+    }
+
+    async function registerStudent() {
+        const sid = document.getElementById('regStudentId').value;
+        const cid = document.getElementById('regCourseId').value;
+        const results = document.getElementById('results');
+        if (!sid || !cid) { results.innerHTML = '<div class="message error">Completați ambele câmpuri!</div>'; return; }
+        results.innerHTML = '<div class="loading">Se procesează...</div>';
+        try {
+            const data = await fetchJson(`${API_URL}/register`, {
+                method: 'POST', headers: getHeaders(),
+                body: JSON.stringify({ studentId: sid, courseId: cid })
+            });
+            // backend poate returna { message: '...' } sau altceva
+            const message = (data && (data.message || data.msg)) || 'Solicitare trimisă';
+            // consideram orice raspuns ok ca succes (daca vrei conditii stricte, verifica data.status)
+            results.innerHTML = `<div class="message success">✅ ${message}</div>`;
+        } catch (error) {
+            results.innerHTML = `<div class="message error">Eroare: ${error.message}</div>`;
+        }
+    }
+
+    // Optional: incarca automat lista la deschidere
+    // showAllStudents();
+</script>
+</body>
+</html>
